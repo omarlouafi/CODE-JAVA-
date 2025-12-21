@@ -1,0 +1,184 @@
+package simulateurmotorola6809;
+public class Motorola {
+	Registres registres=new Registres(0,0,0,0,0,0,0,0,0);
+	byte[] memoire = new byte[65536];
+	private int prochaineAdresse = 0x1000;
+	public void chargerEnMemoire(byte[] programme) {
+        for (int i = 0; i < programme.length; i++) {
+            memoire[prochaineAdresse + i] = programme[i];
+        }
+        registres.setPC(prochaineAdresse);
+        prochaineAdresse += programme.length; 
+    }
+	private int tailleInstructionIndexee(byte postbyte) {
+		
+	    int post = postbyte & 0xFF;
+	    
+	    if (post == 0x00 ||post == 0x80 ||post == 0x82) { 
+	        return 2;
+	    }
+	    else if (post >= 0x88 && post <= 0x8F) {
+	        return 3;
+	    }
+	    else if (post == 0x89) {
+	        return 4;
+	    }
+	    else if (post == 0x8C) {
+	        return 3;
+	    }
+		return post;
+	    }
+	private int calculerAdresseIndexee(byte postbyte, int pc) {
+        int post = postbyte & 0xFF;
+        if (post == 0x00) {
+            return registres.getX();
+        }
+        else if (post == 0x80) {
+            int adresse = registres.getX();
+            registres.setX(adresse + 1);
+            return adresse;
+        }
+        else if (post == 0x82) {
+            registres.setX(registres.getX() - 1);
+            return registres.getX();
+        }
+        else if ((post & 0x9F) == 0x88) { 
+            byte offset = memoire[pc + 2];
+            return registres.getX() + (offset & 0xFF);
+        }
+        else if (post == 0x89) {
+            byte offsetMSB = memoire[pc + 2];
+            byte offsetLSB = memoire[pc + 3];
+            int offset = ((offsetMSB & 0xFF) << 8) | (offsetLSB & 0xFF);
+            return registres.getX() + offset;
+        }
+		return post;
+	}
+	public void executerInstruction() {
+	    int pc = registres.getPC(); 
+	    byte instruction = memoire[pc]; 
+	    if (instruction == (byte)0x86) {
+	        registres.setA(memoire[pc + 1]);
+	        registres.setPC(pc + 2);
+	    }
+	    else if (instruction == (byte)0xB6) { 
+	        byte adresseMSB = memoire[pc + 1];
+	        byte adresseLSB = memoire[pc + 2];
+	        int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	        byte valeur = memoire[adresse];
+	        registres.setA(valeur);
+	        registres.setPC(pc + 3);
+	    }
+	    else if (instruction == (byte)0xA6) { 
+	        byte postbyte = memoire[pc + 1];
+	        int taille = tailleInstructionIndexee(postbyte); 
+	        int adresse = calculerAdresseIndexee(postbyte, pc);
+	        byte valeur = memoire[adresse];
+	        registres.setA(valeur);
+	        registres.setPC(pc + taille);
+	    }
+
+	        else if (instruction == (byte)0xC6) {
+	            byte valeur = memoire[pc + 1];
+	            registres.setB(valeur);
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xD6) {
+	            byte adresse = memoire[pc + 1];
+	            byte valeur = memoire[adresse & 0xFF];
+	            registres.setB(valeur);
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xF6) {
+	            byte adresseMSB = memoire[pc + 1];
+	            byte adresseLSB = memoire[pc + 2];
+	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	            byte valeur = memoire[adresse];
+	            registres.setB(valeur);
+	            registres.setPC(pc + 3);
+	        }
+	        else if (instruction == (byte)0xE6) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            byte valeur = memoire[adresse];
+	            registres.setB(valeur);
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0x97) {
+	            byte adresse = memoire[pc + 1];
+	            memoire[adresse & 0xFF] = (byte)registres.getA();
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xB7) {
+	            byte adresseMSB = memoire[pc + 1];
+	            byte adresseLSB = memoire[pc + 2];
+	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	            memoire[adresse] = (byte)registres.getA();
+	            registres.setPC(pc + 3);
+	        }
+	        else if (instruction == (byte)0xA7) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            memoire[adresse] = (byte)registres.getA();
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0xD7) {
+	            byte adresse = memoire[pc + 1];
+	            memoire[adresse & 0xFF] = (byte)registres.getB();
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xF7) {
+	            byte adresseMSB = memoire[pc + 1];
+	            byte adresseLSB = memoire[pc + 2];
+	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	            memoire[adresse] = (byte)registres.getB();
+	            registres.setPC(pc + 3);
+	        }
+	        else if (instruction == (byte)0xE7) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            memoire[adresse] = (byte)registres.getB();
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0x4A) { 
+	            int a = registres.getA();
+	            registres.setA((a - 1) & 0xFF); 
+	            registres.setPC(pc + 1); 
+	        }
+	        else if (instruction == (byte)0x5A) { 
+	            int b = registres.getB();
+	            registres.setB((b - 1) & 0xFF); 
+	            registres.setPC(pc + 1); 
+	        }
+	        else if (instruction == (byte)0x4C) {
+	            int a = registres.getA();
+	            registres.setA((a + 1) & 0xFF);
+	            registres.setPC(pc + 1);
+	        }
+	        else if (instruction == (byte)0x1F) { 
+	            byte postbyte = memoire[pc + 1];
+	            int source = (postbyte >> 4) & 0x0F; 
+	            int dest = postbyte & 0x0F;        
+	            if (source == 0x8 && dest == 0x9) { 
+	                registres.setB(registres.getA());
+	            }
+	            else if (source == 0x9 && dest == 0x8) { 
+	                registres.setA(registres.getB());
+	            }
+	            else if (source == 0x1 && dest == 0x2) { 
+	                registres.setY(registres.getX());
+	            }
+	            else if (source == 0x2 && dest == 0x1) { 
+	                registres.setX(registres.getY());
+	            }
+	            
+	            registres.setPC(pc + 2);
+	        }
+	    
+	    
+	    
+      
+}}
