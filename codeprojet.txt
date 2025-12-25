@@ -1,0 +1,1496 @@
+package simulateurmotorola6809;
+
+
+public class Registres {
+private int PC;
+private int A;
+private int B;
+private int X;
+private int Y;
+private int S;
+private int U;
+private int DP;
+private int CCR;
+
+
+public Registres(int PC, int A, int B, int X, int Y, int S, int U, int DP, int CCR) {
+	this.PC = PC;
+	this.A = A;
+	this.B = B;
+	this.X = X;
+	this.Y = Y;
+	this.S = S;
+	this.U = U;
+	this.DP = DP;
+	this.CCR = CCR;
+}
+
+public int getPC() {
+	return PC;
+}
+
+public int getA() {
+	return A;
+}
+public void setA(int a) {
+	A = a;
+}
+public int getB() {
+	return B;
+}
+public void setB(int b) {
+	B = b;
+}
+public int getX() {
+	return X;
+}
+public void setX(int x) {
+	X = x;
+}
+public int getY() {
+	return Y;
+}
+public void setY(int y) {
+	Y = y;
+}
+public int getS() {
+	return S;
+}
+public void setS(int s) {
+	S = s;
+}
+public int getU() {
+	return U;
+}
+public void setU(int u) {
+	U = u;
+}
+public int getDP() {
+	return DP;
+}
+public void setDP(int dP) {
+	DP = dP;
+}
+public int getCCR() {
+	return CCR;
+}
+public void setCCR(int cCR) {
+	CCR = cCR;
+}
+
+public void setPC(int pC) {
+	PC = pC;
+}
+
+
+
+
+
+}
+package simulateurmotorola6809;
+public class Motorola {
+	Registres registres=new Registres(0,0,0,0,0,0,0,0,0);
+	byte[] memoire = new byte[0xFFFF];
+	private int prochaineAdresse = 0xC000;
+	public void chargerEnMemoire(byte[] programme) {
+        for (int i = 0; i < programme.length; i++) {
+            memoire[prochaineAdresse + i] = programme[i];
+        }
+        registres.setPC(prochaineAdresse);
+        prochaineAdresse += programme.length; 
+    }
+	private int tailleInstructionIndexee(byte postbyte) {
+		
+	    int post = postbyte & 0xFF;
+	    
+	    if (post == 0x00 ||post == 0x80 ||post == 0x82) { 
+	        return 2;
+	    }
+	    else if (post >= 0x88 && post <= 0x8F) {
+	        return 3;
+	    }
+	    else if (post == 0x89) {
+	        return 4;
+	    }
+	    else if (post == 0x8C) {
+	        return 3;
+	    }
+		return post;
+	    }
+	private int calculerAdresseIndexee(byte postbyte, int pc) {
+        int post = postbyte & 0xFF;
+        if (post == 0x00) {
+            return registres.getX();
+        }
+        else if (post == 0x80) {
+            int adresse = registres.getX();
+            registres.setX(adresse + 1);
+            return adresse;
+        }
+        else if (post == 0x82) {
+            registres.setX(registres.getX() - 1);
+            return registres.getX();
+        }
+        else if ((post & 0x9F) == 0x88) { 
+            byte offset = memoire[pc + 2];
+            return registres.getX() + (offset & 0xFF);
+        }
+        else if (post == 0x89) {
+            byte offsetMSB = memoire[pc + 2];
+            byte offsetLSB = memoire[pc + 3];
+            int offset = ((offsetMSB & 0xFF) << 8) | (offsetLSB & 0xFF);
+            return registres.getX() + offset;
+        }
+		return post;
+	}
+	public void executerInstruction() {
+	    int pc = registres.getPC(); 
+	    byte instruction = memoire[pc]; 
+	    if (instruction == (byte)0x86) {
+	        registres.setA(memoire[pc + 1] & 0xFF);
+	        registres.setPC(pc + 2);
+	    }
+	    else if (instruction == (byte)0xB6) { 
+	    	
+	    	if(Conversioninstruc.b) {
+
+    		    byte adresseMSB = memoire[pc + 1]; 
+    		    byte adresseLSB = memoire[pc + 2];
+    		    int adresseIndirecte = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF); 
+
+    		    byte adresseFinaleMSB = memoire[adresseIndirecte]; 
+    		    byte adresseFinaleLSB = memoire[adresseIndirecte + 1]; 
+    		    int adresseFinale = ((adresseFinaleMSB & 0xFF) << 8) | (adresseFinaleLSB & 0xFF); 
+
+    		    byte valeur = memoire[adresseFinale];
+
+    		  
+    		    registres.setA(valeur);
+
+    		  
+    		    registres.setPC(pc + 3);
+    		
+    		
+       }
+	    	else {
+	        byte adresseMSB = memoire[pc + 1];
+	        byte adresseLSB = memoire[pc + 2];
+	        int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	        byte valeur = memoire[adresse];
+	        registres.setA(valeur);
+	        registres.setPC(pc + 3);}
+	    }
+	    else if (instruction == (byte)0x96) {
+        	byte dp=(byte)registres.getDP();
+            byte adresse = memoire[pc + 1];
+            int adresse1 = ((dp & 0xFF) << 8) | (adresse & 0xFF);
+            byte valeur = memoire[adresse1 & 0xFF];
+            registres.setA(valeur);
+            registres.setPC(pc + 2);
+        }
+	    else if (instruction == (byte)0xA6) { 
+	        byte postbyte = memoire[pc + 1];
+	        int taille = tailleInstructionIndexee(postbyte); 
+	        int adresse = calculerAdresseIndexee(postbyte, pc);
+	        byte valeur = memoire[adresse];
+	        registres.setA(valeur);
+	        registres.setPC(pc + taille);
+	    }
+	    
+
+	        else if (instruction == (byte)0xC6) {
+	            byte valeur = memoire[pc + 1];
+	            registres.setB(valeur);
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xD6) {
+	        	byte dp=(byte)registres.getDP();
+	            byte adresse = memoire[pc + 1];
+	            int adresse1 = ((dp & 0xFF) << 8) | (adresse & 0xFF);
+	            byte valeur = memoire[adresse1 & 0xFF];
+	            registres.setB(valeur);
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xF6) {
+	        	if(Conversioninstruc.b) {
+	        		
+	        		
+	        		    byte adresseMSB = memoire[pc + 1]; 
+	        		    byte adresseLSB = memoire[pc + 2]; 
+	        		    int adresseIndirecte = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF); 
+
+	        		    byte adresseFinaleMSB = memoire[adresseIndirecte]; 
+	        		    byte adresseFinaleLSB = memoire[adresseIndirecte + 1];
+	        		    int adresseFinale = ((adresseFinaleMSB & 0xFF) << 8) | (adresseFinaleLSB & 0xFF); 
+
+	        		
+	        		    byte valeur = memoire[adresseFinale];
+
+	        		    registres.setB(valeur);
+
+	        		    registres.setPC(pc + 3);
+	        		
+	        		
+	           }
+	        	else {
+	        		
+	        		  byte adresseMSB = memoire[pc + 1];
+	  	            byte adresseLSB = memoire[pc + 2];
+	  	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	  	            byte valeur = memoire[adresse];
+	  	            registres.setB(valeur);
+	  	            registres.setPC(pc + 3);
+	        		
+	        		
+	        	}}
+	        	else if (instruction == (byte)0x84) { 
+	        	    byte valeur = memoire[pc + 1];
+	        	    int resultat = registres.getA() & (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 2);
+	        	}
+	        	else if (instruction == (byte)0x94) { 
+	        	    byte adresse = memoire[pc + 1];
+	        	    int adresseComplete = (registres.getDP() << 8) | (adresse & 0xFF);
+	        	    byte valeur = memoire[adresseComplete];
+	        	    int resultat = registres.getA() & (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 2);
+	        	}
+	        	else if (instruction == (byte)0xB4) { 
+	        	    byte adresseMSB = memoire[pc + 1];
+	        	    byte adresseLSB = memoire[pc + 2];
+	        	    int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	        	    byte valeur = memoire[adresse];
+	        	    int resultat = registres.getA() & (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 3);
+	        	}
+	        	
+	        	else if (instruction == (byte)0x8A) { 
+	        	    byte valeur = memoire[pc + 1];
+	        	    int resultat = registres.getA() | (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 2);
+	        	}
+	        	else if (instruction == (byte)0x9A) { 
+	        	    byte adresse = memoire[pc + 1];
+	        	    int adresseComplete = (registres.getDP() << 8) | (adresse & 0xFF);
+	        	    byte valeur = memoire[adresseComplete];
+	        	    int resultat = registres.getA() | (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 2);
+	        	}
+	        	else if (instruction == (byte)0xBA) { 
+	        	    byte adresseMSB = memoire[pc + 1];
+	        	    byte adresseLSB = memoire[pc + 2];
+	        	    int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	        	    byte valeur = memoire[adresse];
+	        	    int resultat = registres.getA() | (valeur & 0xFF);
+	        	    registres.setA(resultat);
+	        	    registres.setPC(pc + 3);
+	        	}
+	        	
+	        
+	        else if (instruction == (byte)0xE6) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            byte valeur = memoire[adresse];
+	            registres.setB(valeur);
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0x97) { /
+	            byte adresseRelative = memoire[pc + 1];          
+	            int adresseComplete = (registres.getDP() << 8) | (adresseRelative & 0xFF);
+	            
+	         
+	            memoire[adresseComplete] = (byte)registres.getA();
+	            
+	            registres.setPC(pc + 2);
+	        }
+	        else if (instruction == (byte)0xB7) {
+	            byte adresseMSB = memoire[pc + 1];
+	            byte adresseLSB = memoire[pc + 2];
+	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	            memoire[adresse] = (byte)registres.getA();
+	            registres.setPC(pc + 3);
+	        }
+	        else if (instruction == (byte)0xA7) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            memoire[adresse] = (byte)registres.getA();
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0xD7) {
+	
+	 	            byte adresseRelative = memoire[pc + 1];           
+	 	            int adresseComplete = (registres.getDP() << 8) | (adresseRelative & 0xFF);
+	 	            
+	 	           
+	 	         memoire[adresseComplete]   =  (byte)registres.getB();
+	 	            
+	 	            registres.setPC(pc + 2);
+	 	        
+	        }
+	        else if (instruction == (byte)0xF7) {
+	            byte adresseMSB = memoire[pc + 1];
+	            byte adresseLSB = memoire[pc + 2];
+	            int adresse = ((adresseMSB & 0xFF) << 8) | (adresseLSB & 0xFF);
+	            memoire[adresse] = (byte)registres.getB();
+	            registres.setPC(pc + 3);
+	        }
+	        else if (instruction == (byte)0xE7) {
+	            byte postbyte = memoire[pc + 1];
+	            int taille = tailleInstructionIndexee(postbyte);
+	            int adresse = calculerAdresseIndexee(postbyte, pc);
+	            memoire[adresse] = (byte)registres.getB();
+	            registres.setPC(pc + taille);
+	        }
+	        else if (instruction == (byte)0x4A) { 
+	            int a = registres.getA();
+	            registres.setA((a - 1) & 0xFF); 
+	            registres.setPC(pc + 1); 
+	        }
+	        else if (instruction == (byte)0x5A) { 
+	            int b = registres.getB();
+	            registres.setB((b - 1) & 0xFF); 
+	            registres.setPC(pc + 1); 
+	        }
+	        else if (instruction == (byte)0x4C) {
+	            int a = registres.getA();
+	            registres.setA((a + 1) & 0xFF);
+	            registres.setPC(pc + 1);
+	        }
+	        else if (instruction == (byte)0x1F) { 
+	            byte postbyte = memoire[pc + 1];
+	            int source = (postbyte >> 4) & 0x0F; 
+	            int dest = postbyte & 0x0F;        
+	            if (source == 0x8 && dest == 0x9) { 
+	                registres.setB(registres.getA());
+	            }
+	            else if (source == 0x9 && dest == 0x8) { 
+	                registres.setA(registres.getB());
+	            }
+	            else if (source == 0x1 && dest == 0x2) { 
+	                registres.setY(registres.getX());
+	            }
+	            else if (source == 0x2 && dest == 0x1) { 
+	                registres.setX(registres.getY());
+	            }
+	            
+	            registres.setPC(pc + 2);
+	        }
+	    
+	    
+	    
+      
+
+	     
+	        
+	}}package simulateurmotorola6809;
+
+public class Conversioninstruc{
+	
+	public static boolean b;
+	
+public byte[] convertir(String mnemonic, String operande) {
+	    if (mnemonic.equals("LDA")) {
+	        if (operande.startsWith("#")) {
+	        	String vraioperande = operande.substring(2); 
+	            int op = Integer.parseInt(vraioperande, 16);
+	            return new byte[] {(byte)0x86, (byte)op};
+	            }
+	        else if (operande.startsWith("<")){
+	        	
+	        	String vraioperande = operande.substring(2); 
+	            int op = Integer.parseInt(vraioperande, 16);
+	        	return new byte[] {(byte)0x96, (byte)op};} 
+	        else if (operande.startsWith(",x"))
+	        		{
+	        	return new byte[] {(byte)0xA6, (byte)0x00};
+	        		}
+	        else if (operande.equals(",x+")) {
+	        	return new byte[] { (byte)0xA6,(byte)0x80};}
+	        else if (operande.equals(",-x")) {
+	        	return new byte[] { (byte)0xA6,(byte)0x82};
+	        }
+	        if (operande.contains(",x")) {
+	            String offsetTexte = operande.substring(1, operande.indexOf(","));
+	            int offset = Integer.parseInt(offsetTexte, 16);
+	            
+	            if (offset <= 0xFF) {
+	                return new byte[] {(byte)0xA6, (byte)0x88, (byte)offset};
+	            } else {
+	                return new byte[] {(byte)0xA6, (byte)0x89,
+	                                  (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	            }
+	        }
+	        else if (operande.contains(",PC")) {
+	            String offsetTexte = operande.substring(1, operande.indexOf(","));
+	            int offset = Integer.parseInt(offsetTexte, 16);
+	            
+	            return new byte[] {(byte)0xA6, (byte)0x8C, (byte)offset};
+	        }	        	
+	        
+	        
+	    else if (operande.startsWith(">")) {
+	    	b=false;
+	    	String vraioperande = operande.substring(2); 
+            int op = Integer.parseInt(vraioperande, 16); 
+        	return new byte[] {(byte)0xB6, (byte)(op >> 8),(byte)(op & 0xFF)};
+	    }
+	    if (operande.startsWith("[")) {
+	    	b=true;
+	        String vraioperande = operande.substring(2, operande.length() - 1);
+	        int op = Integer.parseInt(vraioperande, 16);
+	        return new byte[] {(byte)0xB6, (byte)(op >> 8),(byte)(op & 0xFF)};
+	    }
+	    }
+	  
+	        else if (mnemonic.equals("LDB")) {
+	            if (operande.startsWith("#")) {
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xC6, (byte)op};
+	            }
+	            else if (operande.startsWith("<")) {
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xD6, (byte)op};
+	            }
+	            else if (operande.startsWith(">")) {
+	            	b=false;
+	 
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16); 
+	                return new byte[] {(byte)0xF6, (byte)(op >> 8),(byte)(op & 0xFF)};
+	            }
+	            else if (operande.startsWith(",x")) {
+	                return new byte[] {(byte)0xE6, (byte)0x00};
+	            }
+	            else if (operande.equals(",x+")) {
+	                return new byte[] { (byte)0xE6, (byte)0x80};
+	            }
+	            else if (operande.equals(",-x")) {
+	                return new byte[] { (byte)0xE6, (byte)0x82};
+	            }
+	            else if (operande.contains(",x")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                
+	                if (offset <= 0xFF) {
+	                    return new byte[] {(byte)0xE6, (byte)0x88, (byte)offset};
+	                } else {
+	                    return new byte[] {(byte)0xE6, (byte)0x89,
+	                                      (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	                }
+	            }
+	            else if (operande.contains(",PC")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                return new byte[] {(byte)0xE6, (byte)0x8C, (byte)offset};
+	            }
+	            else if (operande.startsWith("[")) {
+	            	b=true;
+	                String vraioperande = operande.substring(2, operande.length() - 1);
+	                int op = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xF6 ,(byte)(op >> 8),(byte)(op & 0xFF)};
+	            }
+	            else if (operande.startsWith("$")) {
+	                String vraioperande = operande.substring(1);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                if (adresse <= 0xFF) {
+	                    return new byte[] {(byte)0xD6, (byte)adresse};
+	                } else {
+	                    return new byte[] {(byte)0xF6, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	                }
+	            }
+	        }
+	        else if (mnemonic.equals("STA")) {
+	        	if (operande.startsWith("<")){
+		        	String vraioperande = operande.substring(2); 
+		            int op = Integer.parseInt(vraioperande, 16);
+		        	return new byte[] {(byte)0x97, (byte)op};}
+	        	
+	        	else if (operande.startsWith(">")) {
+	        		
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16); 
+	                return new byte[] {(byte)0xB7, (byte)(op >> 8), (byte)(op & 0xFF)};
+	            }
+	        
+	        
+	            else if (operande.startsWith(",x")) {
+	                return new byte[] {(byte)0xA7, (byte)0x00};
+	            }
+	            else if (operande.startsWith("$")) {
+	                String vraioperande = operande.substring(1);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                if (adresse <= 0xFF) {
+	                    return new byte[] {(byte)0x97, (byte)adresse}; 
+	                } else {
+	                    return new byte[] {(byte)0xB7, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	                }
+	            }
+	        }
+	        else if (mnemonic.equals("STB")) {
+	            if (operande.startsWith("<")) {
+	                
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xD7, (byte)op};
+	            }
+	            else if (operande.startsWith(">")) {
+	                
+	                String vraioperande = operande.substring(2); 
+	                int op = Integer.parseInt(vraioperande, 16); 
+	                return new byte[] {(byte)0xF7, (byte)(op >> 8), (byte)(op & 0xFF)};
+	            }
+	            else if (operande.startsWith(",x")) {
+	                
+	                return new byte[] {(byte)0xE7, (byte)0x00};
+	            }
+	            else if (operande.startsWith("$")) {
+	                String vraioperande = operande.substring(1);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                if (adresse <= 0xFF) {
+	                    return new byte[] {(byte)0xD7, (byte)adresse}; 
+	                } else {
+	                    return new byte[] {(byte)0xF7, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	                }
+	            }
+	            
+	        }
+	        else if (mnemonic.equals("TFR")) {
+	            if (operande.equals("A,B")) {
+	                return new byte[] {(byte)0x1F, (byte)0x89};
+	            }
+	            else if (operande.equals("B,A")) {
+	                return new byte[] {(byte)0x1F, (byte)0x98};
+	            }
+	            else if (operande.equals("X,Y")) {
+	                return new byte[] {(byte)0x1F, (byte)0x12};
+	            }
+	            else if (operande.equals("Y,X")) {
+	                return new byte[] {(byte)0x1F, (byte)0x21};
+	            }
+	        }
+	        else if (mnemonic.equals("ADDA")) {
+	        	if  (operande.startsWith("#")){
+	        		String vraioperande = operande.substring(2);
+	        		 int adresse = Integer.parseInt(vraioperande, 16);
+	        		 return new byte[] {(byte)0x8B, (byte)adresse};
+	        	}
+	        	else if (operande.startsWith("<")) {
+	        		String vraioperande = operande.substring(2);
+	        		 int adresse = Integer.parseInt(vraioperande, 16);
+	        		 return new byte[] {(byte)0x9B, (byte)adresse};
+	        	}
+	        	else if (operande.startsWith(">")) {
+	        		String vraioperande = operande.substring(2);
+	        		 int adresse = Integer.parseInt(vraioperande, 16);
+	        		 return new byte[] {(byte)0xBB, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	        		 
+	        	}
+	        	else if (operande.equals(",x")) {
+	        	        return new byte[] {(byte)0xAB, (byte)0x00};
+	        	    }
+	        	    else if (operande.equals(",x+")) {
+	        	        return new byte[] {(byte)0xAB, (byte)0x80};
+	        	    }
+	        	    else if (operande.equals(",-x")) {
+	        	        return new byte[] {(byte)0xAB, (byte)0x82};
+	        	    }
+	        	    else if (operande.contains(",x")) {
+	        	        String offsetTexte = operande.substring(1, operande.indexOf(","));
+	        	        int offset = Integer.parseInt(offsetTexte, 16);
+	        	        
+	        	        if (offset <= 0xFF) {
+	        	            return new byte[] {(byte)0xAB, (byte)0x88, (byte)offset};
+	        	        } else {
+	        	            return new byte[] {(byte)0xAB, (byte)0x89,
+	        	                              (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	        	        }
+	        	    }
+	        	    else if (operande.contains(",PC")) {
+	        	        String offsetTexte = operande.substring(1, operande.indexOf(","));
+	        	        int offset = Integer.parseInt(offsetTexte, 16);
+	        	        return new byte[] {(byte)0xAB, (byte)0x8C, (byte)offset};
+	        	    }
+	                }
+	        else if (mnemonic.equals("ADDB")) {
+	            if (operande.startsWith("#")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xCB, (byte)adresse};  
+	            }
+	            else if (operande.startsWith("<")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xDB, (byte)adresse};  
+	            }
+	            else if (operande.startsWith(">")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xFB, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	            }
+	            else if (operande.equals(",x")) {
+	                return new byte[] {(byte)0xEB, (byte)0x00};  
+	            }
+	            else if (operande.equals(",x+")) {
+	                return new byte[] {(byte)0xEB, (byte)0x80};  
+	            }
+	            else if (operande.equals(",-x")) {
+	                return new byte[] {(byte)0xEB, (byte)0x82};  
+	            }
+	            else if (operande.contains(",x")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                
+	                if (offset <= 0xFF) {
+	                    return new byte[] {(byte)0xEB, (byte)0x88, (byte)offset};  
+	                } else {
+	                    return new byte[] {(byte)0xEB, (byte)0x89,  
+	                                      (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	                }
+	            }
+	            else if (operande.contains(",PC")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                return new byte[] {(byte)0xEB, (byte)0x8C, (byte)offset};
+	            }
+	        }
+	        else if (mnemonic.equals("SUBA")) {
+	            if (operande.startsWith("#")) {
+	            	String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x80, (byte)adresse};
+	            }
+	            else if (operande.startsWith("<")) {
+	            	String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x90, (byte)adresse};
+	            }
+	            else if (operande.startsWith(">")) {
+	            	String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xB0, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	            }
+	            else if (operande.equals(",x")) {
+	                return new byte[] {(byte)0xA0, (byte)0x00};
+	            }
+	            else if (operande.equals(",x+")) {
+	                return new byte[] {(byte)0xA0, (byte)0x80};
+	            }
+	            else if (operande.equals(",-x")) {
+	                return new byte[] {(byte)0xA0, (byte)0x82};
+	            }
+	            else if (operande.contains(",x")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                
+	                if (offset <= 0xFF) {
+	                    return new byte[] {(byte)0xA0, (byte)0x88, (byte)offset};
+	                } else {
+	                    return new byte[] {(byte)0xA0, (byte)0x89,
+	                                      (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	                }
+	            }
+	            else if (operande.contains(",PC")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                return new byte[] {(byte)0xA0, (byte)0x8C, (byte)offset};
+	            }
+	        }
+	        else if (mnemonic.equals("SUBB")) {
+	            if (operande.startsWith("#")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xC0, (byte)adresse};  
+	            }
+	            else if (operande.startsWith("<")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xD0, (byte)adresse};  
+	            }
+	            else if (operande.startsWith(">")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xF0, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	            }
+	            else if (operande.equals(",x")) {
+	                return new byte[] {(byte)0xE0, (byte)0x00};
+	            }
+	            else if (operande.equals(",x+")) {
+	                return new byte[] {(byte)0xE0, (byte)0x80};
+	            }
+	            else if (operande.equals(",-x")) {
+	                return new byte[] {(byte)0xE0, (byte)0x82};
+	            }
+	            else if (operande.contains(",x")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                
+	                if (offset <= 0xFF) {
+	                    return new byte[] {(byte)0xE0, (byte)0x88, (byte)offset};
+	                } else {
+	                    return new byte[] {(byte)0xE0, (byte)0x89,
+	                                      (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	                }
+	            }
+	            else if (operande.contains(",PC")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                return new byte[] {(byte)0xE0, (byte)0x8C, (byte)offset};
+	            }
+	            else if (mnemonic.equals("INCA")) {
+	                return new byte[] {(byte)0x4C};  
+	            }
+	            else if (mnemonic.equals("INCB")) { 
+	                return new byte[] {(byte)0x5C};
+	            }
+	            else if (mnemonic.equals("DECA")) {
+	                return new byte[] {(byte)0x4A};  
+	            }
+	            else if (mnemonic.equals("DECB")) {
+	                return new byte[] {(byte)0x5A};  
+	            }
+	            else if (mnemonic.equals("COMA")) {
+	                return new byte[] {(byte)0x43};  
+	            }
+	            else if (mnemonic.equals("COMB")) {
+	                return new byte[] {(byte)0x53};  
+	            }
+	            else if (mnemonic.equals("COM")) {
+	                if (operande.startsWith("<")) {
+	                    String vraioperande = operande.substring(2);
+	                    int adresse = Integer.parseInt(vraioperande, 16);
+	                    return new byte[] {(byte)0x03, (byte)adresse}; 
+	                }
+	                else if (operande.startsWith(">")) {
+	                    String vraioperande = operande.substring(2);
+	                    int adresse = Integer.parseInt(vraioperande, 16);
+	                    return new byte[] {(byte)0x73, (byte)(adresse >> 8), (byte)(adresse & 0xFF)};
+	                }
+	                else if (operande.equals(",x")) {
+	                    return new byte[] {(byte)0x63, (byte)0x00};
+	                }
+	            }
+	            else if (mnemonic.equals("INC")) {
+	                if (operande.startsWith("<")) {
+	                    String vraioperande = operande.substring(2);
+	                    int adresse = Integer.parseInt(vraioperande, 16);
+	                    return new byte[] {(byte)0x0C, (byte)adresse}; 
+	                }
+	                else if (operande.startsWith(">")) {
+	                    String vraioperande = operande.substring(2);
+	                    int adresse = Integer.parseInt(vraioperande, 16);
+	                    return new byte[] {(byte)0x7C, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	                }
+	                else if (operande.equals(",x")) {
+	                    return new byte[] {(byte)0x6C, (byte)0x00}; 
+	                }
+	                else if (operande.startsWith("$")) {
+	                    String vraioperande = operande.substring(1);
+	                    int adresse = Integer.parseInt(vraioperande, 16);
+	                    if (adresse <= 0xFF) {
+	                        return new byte[] {(byte)0x0C, (byte)adresse}; 
+	                    } else {
+	                        return new byte[] {(byte)0x7C, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	                    }
+	                }
+	            }
+	            	
+	            
+	            
+	        }
+	        
+	        else if (mnemonic.equals("ANDA")) {
+	            if (operande.startsWith("#")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x84, (byte)adresse};  
+	            }
+	            else if (operande.startsWith("<")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x94, (byte)adresse};  
+	            }
+	            else if (operande.startsWith(">")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xB4, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	            }
+	            else if (operande.equals(",x")) {
+	                return new byte[] {(byte)0xA4, (byte)0x00};  
+	            }
+	            else if (operande.equals(",x+")) {
+	                return new byte[] {(byte)0xA4, (byte)0x80};
+	            }
+	            else if (operande.equals(",-x")) {
+	                return new byte[] {(byte)0xA4, (byte)0x82};
+	            }
+	            else if (operande.contains(",x")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                if (offset <= 0xFF) {
+	                    return new byte[] {(byte)0xA4, (byte)0x88, (byte)offset};
+	                } else {
+	                    return new byte[] {(byte)0xA4, (byte)0x89,
+	                                      (byte)(offset >> 8), (byte)(offset & 0xFF)};
+	                }
+	            }
+	            else if (operande.contains(",PC")) {
+	                String offsetTexte = operande.substring(1, operande.indexOf(","));
+	                int offset = Integer.parseInt(offsetTexte, 16);
+	                return new byte[] {(byte)0xA4, (byte)0x8C, (byte)offset};
+	            }
+	        }
+
+	        
+	        else if (mnemonic.equals("ORAA")) {
+	            if (operande.startsWith("#")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x8A, (byte)adresse}; 
+	            }
+	            else if (operande.startsWith("<")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0x9A, (byte)adresse};  
+	            }
+	            else if (operande.startsWith(">")) {
+	                String vraioperande = operande.substring(2);
+	                int adresse = Integer.parseInt(vraioperande, 16);
+	                return new byte[] {(byte)0xBA, (byte)(adresse >> 8), (byte)(adresse & 0xFF)}; 
+	            }
+	            else if (operande.equals(",x")) {
+	                return new byte[] {(byte)0xAA, (byte)0x00};  
+	            }
+	            
+	        }    if (mnemonic.equals("NOP")&& (operande == null || operande.trim().isEmpty())) {
+		        return new byte[] {(byte)0x12};
+		    }
+		    if (mnemonic.equals("SWI")&& (operande == null || operande.trim().isEmpty())) {
+		        return new byte[] {(byte)0x3F}; 
+		    }
+		    
+		    if (mnemonic.equals("MUL") && (operande == null || operande.trim().isEmpty())) {
+		        
+		        return new byte[] { (byte)0x3D};
+		    }
+		    if (mnemonic.equals("JMP")) {
+		        if (operande.startsWith("$")) {
+		            int b = operande.length();
+		            if (b == 3) {
+		               
+		                String vraioperande = operande.substring(1);
+		                int op = Integer.parseInt(vraioperande, 16);
+		                return new byte[]{(byte)0x0E, (byte)op};
+		            } else if (b == 5) {
+		   
+		                String vraioperand1 = operande.substring(1, 3);
+		                int adress1 = Integer.parseInt(vraioperand1, 16);
+		                String vraioperand2 = operande.substring(3, 5);
+		                int adress2 = Integer.parseInt(vraioperand2, 16);
+		                return new byte[]{(byte)0x7E, (byte)adress1, (byte)adress2};
+		            }
+		        } else if (operande.startsWith(",x")) {
+		         
+		            return new byte[]{(byte)0x6E, (byte)0x00};
+		        } else if (operande.equals(",x+")) {
+		            return new byte[]{(byte)0x6E, (byte)0x80};
+		        } else if (operande.equals(",-x")) {
+		            return new byte[]{(byte)0x6E, (byte)0x82};
+		        } else if (operande.startsWith("$") && operande.endsWith(",x")) {
+		           
+		            String offsetTexte = operande.substring(1, operande.indexOf(","));
+		            int offset = Integer.parseInt(offsetTexte, 16);
+		            if (offset <= 0xFF) {
+		                return new byte[]{(byte)0x6E, (byte)0x88, (byte)offset};
+		            } else {
+		                return new byte[]{(byte)0x6E, (byte)0x89,
+		                                  (byte)(offset >> 8), (byte)(offset & 0xFF)};
+		            }
+		        }
+		    }
+		    
+	        
+	       
+
+	        	 
+	        
+	    
+	    
+	
+	
+return new byte[0];
+}
+}
+
+package simulateurmotorola6809;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+
+    
+	public class Interfaceprojetmotorola extends JFrame {
+	    
+	    private Registres registres;
+	    private Conversioninstruc convertisseur;
+	    private Motorola motorola;
+	    private JTextField pcField;
+	    private JTextField aField;
+	    private JTextField bField;
+	    private JTextField xField;
+	    private JTextField yField;
+	    private JTextField sField;
+	    private JTextField uField;
+	    private JTextField dpField;
+	    private JCheckBox eCheckBox, fCheckBox, hCheckBox, iCheckBox, nCheckBox, zCheckBox, vCheckBox, cCheckBox;
+	    private JTextArea ramArea;
+	    private JTextArea romArea;
+	    private JTextArea editeurArea;
+	    private int indexInstruction = 0;
+	    private String[] instructions;
+	    
+	    public Interfaceprojetmotorola() {
+	        registres = new Registres(0x0000, 0x00, 0x00, 0x0000, 0x0000, 0x0000, 0x0000, 0x00, 0x00);
+	        convertisseur = new Conversioninstruc();
+	        motorola = new Motorola();
+	        motorola.registres = registres;
+	        
+	        this.setTitle("Simulateur Motorola 6809");
+	        this.setSize(900, 600);
+	        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	        this.setLayout(new BorderLayout());
+	        
+	        // Création de la barre de menu
+	        JMenuBar menuBar = new JMenuBar();
+	        
+	        // Bouton Éditeur
+	        JButton editeurButton = new JButton("Éditeur");
+	        editeurButton.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                ouvrirEditeur();
+	            }
+	        });
+	        menuBar.add(editeurButton);
+	        
+	        // Bouton Mémoire
+	        JMenu memoireMenu = new JMenu("Mémoire");
+	        
+	        JMenuItem ramItem = new JMenuItem("Afficher RAM (0x0000 - 0xBFFF)");
+	        ramItem.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                afficherRAMDetaille();
+	            }
+	        });
+	        
+	        JMenuItem romItem = new JMenuItem("Afficher ROM (0xC000 - 0xFFFF)");
+	        romItem.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                afficherROMDetaille();
+	            }
+	        });
+	        
+	        JMenuItem touteMemoireItem = new JMenuItem("Afficher toute la mémoire");
+	        touteMemoireItem.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                afficherTouteMemoire();
+	            }
+	        });
+	        
+	        memoireMenu.add(ramItem);
+	        memoireMenu.add(romItem);
+	        memoireMenu.addSeparator();
+	        memoireMenu.add(touteMemoireItem);
+	        menuBar.add(memoireMenu);
+	        
+	        this.setJMenuBar(menuBar);
+	        
+	        // Panel principal
+	        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
+	        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+	        
+	        // Panel gauche : Registres + CCR
+	        JPanel panelGauche = new JPanel(new BorderLayout(5, 5));
+	        
+	        // Panel CCR en haut
+	        JPanel panelCCR = creerPanelCCR();
+	        panelGauche.add(panelCCR, BorderLayout.NORTH);
+	        
+	        // Panel des registres au centre
+	        JPanel panelRegistres = creerPanelRegistres();
+	        panelGauche.add(panelRegistres, BorderLayout.CENTER);
+	        
+	        panelPrincipal.add(panelGauche, BorderLayout.WEST);
+	        
+	        // Panel droit : RAM et ROM
+	        JPanel panelDroit = new JPanel(new GridLayout(2, 1, 5, 5));
+	        
+	        // Panel RAM
+	        JPanel panelRAM = new JPanel(new BorderLayout());
+	        panelRAM.setBorder(BorderFactory.createTitledBorder("RAM"));
+	        ramArea = new JTextArea(10, 25);
+	        ramArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+	        ramArea.setEditable(false);
+	        JScrollPane ramScroll = new JScrollPane(ramArea);
+	        panelRAM.add(ramScroll, BorderLayout.CENTER);
+	        
+	        // Panel ROM
+	        JPanel panelROM = new JPanel(new BorderLayout());
+	        panelROM.setBorder(BorderFactory.createTitledBorder("ROM"));
+	        romArea = new JTextArea(10, 25);
+	        romArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+	        romArea.setEditable(false);
+	        JScrollPane romScroll = new JScrollPane(romArea);
+	        panelROM.add(romScroll, BorderLayout.CENTER);
+	        
+	        panelDroit.add(panelRAM);
+	        panelDroit.add(panelROM);
+	        
+	        panelPrincipal.add(panelDroit, BorderLayout.CENTER);
+	        
+	        this.add(panelPrincipal, BorderLayout.CENTER);
+	        
+	        mettreAJourAffichage();
+	        this.setVisible(true);
+	    }
+	    
+	    private JPanel creerPanelCCR() {
+	        JPanel panel = new JPanel();
+	        panel.setBorder(BorderFactory.createTitledBorder("CCR"));
+	        panel.setLayout(new GridLayout(2, 8, 5, 2));
+	        
+	        // Labels
+	        panel.add(new JLabel("E", SwingConstants.CENTER));
+	        panel.add(new JLabel("F", SwingConstants.CENTER));
+	        panel.add(new JLabel("H", SwingConstants.CENTER));
+	        panel.add(new JLabel("I", SwingConstants.CENTER));
+	        panel.add(new JLabel("N", SwingConstants.CENTER));
+	        panel.add(new JLabel("Z", SwingConstants.CENTER));
+	        panel.add(new JLabel("V", SwingConstants.CENTER));
+	        panel.add(new JLabel("C", SwingConstants.CENTER));
+	        
+	        // CheckBoxes
+	        eCheckBox = new JCheckBox();
+	        fCheckBox = new JCheckBox();
+	        hCheckBox = new JCheckBox();
+	        iCheckBox = new JCheckBox();
+	        nCheckBox = new JCheckBox();
+	        zCheckBox = new JCheckBox();
+	        vCheckBox = new JCheckBox();
+	        cCheckBox = new JCheckBox();
+	        
+	        eCheckBox.setEnabled(false);
+	        fCheckBox.setEnabled(false);
+	        hCheckBox.setEnabled(false);
+	        iCheckBox.setEnabled(false);
+	        nCheckBox.setEnabled(false);
+	        zCheckBox.setEnabled(false);
+	        vCheckBox.setEnabled(false);
+	        cCheckBox.setEnabled(false);
+	        
+	        panel.add(eCheckBox);
+	        panel.add(fCheckBox);
+	        panel.add(hCheckBox);
+	        panel.add(iCheckBox);
+	        panel.add(nCheckBox);
+	        panel.add(zCheckBox);
+	        panel.add(vCheckBox);
+	        panel.add(cCheckBox);
+	        
+	        return panel;
+	    }
+	    
+	    private JPanel creerPanelRegistres() {
+	        JPanel panel = new JPanel();
+	        panel.setLayout(new GridBagLayout());
+	        GridBagConstraints gbc = new GridBagConstraints();
+	        gbc.insets = new Insets(5, 5, 5, 5);
+	        gbc.fill = GridBagConstraints.HORIZONTAL;
+	        
+	        // Registre D (A et B)
+	        gbc.gridx = 0;
+	        gbc.gridy = 0;
+	        panel.add(new JLabel("D"), gbc);
+	        
+	        JPanel panelD = new JPanel(new GridLayout(2, 2, 2, 2));
+	        panelD.add(new JLabel("A", SwingConstants.RIGHT));
+	        aField = new JTextField("00", 4);
+	        aField.setEditable(false);
+	        panelD.add(aField);
+	        panelD.add(new JLabel("B", SwingConstants.RIGHT));
+	        bField = new JTextField("00", 4);
+	        bField.setEditable(false);
+	        panelD.add(bField);
+	        
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        panel.add(panelD, gbc);
+	        
+	        // Registre X
+	        gbc.gridx = 0;
+	        gbc.gridy = 1;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("X"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        xField = new JTextField("0000", 10);
+	        xField.setEditable(false);
+	        panel.add(xField, gbc);
+	        
+	        // Registre Y
+	        gbc.gridx = 0;
+	        gbc.gridy = 2;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("Y"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        yField = new JTextField("0000", 10);
+	        yField.setEditable(false);
+	        panel.add(yField, gbc);
+	        
+	        // Registre S
+	        gbc.gridx = 0;
+	        gbc.gridy = 3;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("S"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        sField = new JTextField("0000", 10);
+	        sField.setEditable(false);
+	        panel.add(sField, gbc);
+	        
+	        // Registre U
+	        gbc.gridx = 0;
+	        gbc.gridy = 4;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("U"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        uField = new JTextField("0000", 10);
+	        uField.setEditable(false);
+	        panel.add(uField, gbc);
+	        
+	        // Registre PC
+	        gbc.gridx = 0;
+	        gbc.gridy = 5;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("PC"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        pcField = new JTextField("0000", 10);
+	        pcField.setEditable(false);
+	        panel.add(pcField, gbc);
+	        
+	        // Registre DP
+	        gbc.gridx = 0;
+	        gbc.gridy = 6;
+	        gbc.gridwidth = 1;
+	        panel.add(new JLabel("DP"), gbc);
+	        gbc.gridx = 1;
+	        gbc.gridwidth = 2;
+	        dpField = new JTextField("00", 10);
+	        dpField.setEditable(false);
+	        panel.add(dpField, gbc);
+	        
+	        panel.setBorder(BorderFactory.createTitledBorder("Registres"));
+	        return panel;
+	    }
+	    
+	    private void ouvrirEditeur() {
+	        JDialog dialog = new JDialog(this, "Éditeur d'instructions", true);
+	        dialog.setSize(600, 500);
+	        dialog.setLayout(new BorderLayout());
+	        
+	        JLabel label = new JLabel("Écrivez vos instructions (une par ligne) :");
+	        dialog.add(label, BorderLayout.NORTH);
+	        
+	        editeurArea = new JTextArea(20, 50);
+	        editeurArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+	        JScrollPane scrollPane = new JScrollPane(editeurArea);
+	        dialog.add(scrollPane, BorderLayout.CENTER);
+	        
+	        JPanel panelBoutons = new JPanel();
+	        
+	        JButton executerButton = new JButton("Exécuter");
+	        executerButton.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                executerInstructionUnique();
+	            }
+	        });
+	        
+	        JButton pasButton = new JButton("Pas à pas");
+	        pasButton.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                preparerPasAPas();
+	            }
+	        });
+	        
+	        JButton fermerButton = new JButton("Fermer");
+	        fermerButton.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                // Réinitialiser l'état
+	                reinitialiserEtat();
+	                dialog.dispose();
+	            }
+	        });
+	        
+	        panelBoutons.add(executerButton);
+	        panelBoutons.add(pasButton);
+	        panelBoutons.add(fermerButton);
+	        dialog.add(panelBoutons, BorderLayout.SOUTH);
+	        
+	        dialog.setLocationRelativeTo(this);
+	        dialog.setVisible(true);
+	    }
+	    
+	    private void reinitialiserEtat() {
+	        // Réinitialiser les registres
+	        registres = new Registres(0x0000, 0x00, 0x00, 0x0000, 0x0000, 0x0000, 0x0000, 0x00, 0x00);
+	        
+	        // Réinitialiser le simulateur
+	        motorola = new Motorola();
+	        motorola.registres = registres;
+	        
+	        // Réinitialiser l'index d'instruction
+	        indexInstruction = 0;
+	        instructions = null;
+	        
+	        // Mettre à jour l'affichage
+	        mettreAJourAffichage();
+	        
+	        JOptionPane.showMessageDialog(this, 
+	            "Le simulateur a été réinitialisé à l'état initial.", 
+	            "Réinitialisation", 
+	            JOptionPane.INFORMATION_MESSAGE);
+	    }
+	    
+	    private void executerInstructionUnique() {
+	        String texte = editeurArea.getText().trim();
+	        if (texte.isEmpty()) {
+	            JOptionPane.showMessageDialog(this, "Aucune instruction à exécuter", "Erreur", JOptionPane.ERROR_MESSAGE);
+	            return;
+	        }
+	        
+	        String[] lignes = texte.split("\n");
+	        String instruction = lignes[0].trim();
+	        
+	        if (executerUneInstruction(instruction)) {
+	            JOptionPane.showMessageDialog(this, 
+	                "Instruction exécutée : " + instruction + 
+	                "\n\nVérifiez les registres!", 
+	                "Exécution réussie", 
+	                JOptionPane.INFORMATION_MESSAGE);
+	        }
+	    }
+	    
+	    private boolean executerUneInstruction(String instruction) {
+	        String[] parties = instruction.split("\\s+", 2);
+	        
+	        if (parties.length < 2) {
+	            JOptionPane.showMessageDialog(this, 
+	                "Format incorrect : " + instruction + 
+	                "\nExemple : LDA #$15", 
+	                "Erreur", 
+	                JOptionPane.ERROR_MESSAGE);
+	            return false;
+	        }
+	        
+	        String mnemonic = parties[0].trim().toUpperCase();
+	        String operande = parties[1].trim();
+	        
+	        try {
+	            byte[] codeMachine = convertisseur.convertir(mnemonic, operande);
+	            
+	            if (codeMachine.length == 0) {
+	                JOptionPane.showMessageDialog(this, 
+	                    "Instruction non supportée : " + mnemonic, 
+	                    "Erreur", 
+	                    JOptionPane.ERROR_MESSAGE);
+	                return false;
+	            }
+	            
+	            motorola.chargerEnMemoire(codeMachine);
+	            motorola.executerInstruction();
+	            
+	            mettreAJourAffichage();
+	            return true;
+	            
+	        } catch (Exception e) {
+	            JOptionPane.showMessageDialog(this, 
+	                "Erreur : " + e.getMessage(), 
+	                "Erreur d'exécution", 
+	                JOptionPane.ERROR_MESSAGE);
+	            return false;
+	        }
+	    }
+	    
+	    private void preparerPasAPas() {
+	        String texte = editeurArea.getText().trim();
+	        if (texte.isEmpty()) {
+	            JOptionPane.showMessageDialog(this, "Aucune instruction à exécuter", "Erreur", JOptionPane.ERROR_MESSAGE);
+	            return;
+	        }
+	        
+	        instructions = texte.split("\n");
+	        indexInstruction = 0;
+	        
+	        JOptionPane.showMessageDialog(this, 
+	            instructions.length + " instructions chargées.\n" +
+	            "Cliquez sur 'Suivant' pour exécuter chaque instruction.", 
+	            "Prêt pour pas à pas", 
+	            JOptionPane.INFORMATION_MESSAGE);
+	        
+	        executerPasAPasAvecDialogue();
+	    }
+	    
+	    private void executerPasAPasAvecDialogue() {
+	        if (indexInstruction >= instructions.length) {
+	            JOptionPane.showMessageDialog(this, 
+	                "Toutes les instructions ont été exécutées!", 
+	                "Terminé", 
+	                JOptionPane.INFORMATION_MESSAGE);
+	            return;
+	        }
+	        
+	        String instruction = instructions[indexInstruction].trim();
+	        if (instruction.isEmpty()) {
+	            indexInstruction++;
+	            executerPasAPasAvecDialogue();
+	            return;
+	        }
+	        
+	        if (executerUneInstruction(instruction)) {
+	            int choix = JOptionPane.showConfirmDialog(this, 
+	                "Instruction " + (indexInstruction + 1) + "/" + instructions.length + " exécutée : " + instruction + 
+	                "\n\nContinuer ?", 
+	                "Pas à pas", 
+	                JOptionPane.YES_NO_OPTION);
+	            
+	            indexInstruction++;
+	            
+	            if (choix == JOptionPane.YES_OPTION && indexInstruction < instructions.length) {
+	                executerPasAPasAvecDialogue();
+	            }
+	        }
+	    }
+	    
+	    private void afficherRAMDetaille() {
+	        afficherZoneMemoire("RAM (0x0000 - 0xBFFF)", 0x0000, 0xC000);
+	    }
+	    
+	    private void afficherROMDetaille() {
+	        afficherZoneMemoire("ROM (0xC000 - 0xFFFF)", 0xC000, 0x10000);
+	    }
+	    
+	    private void afficherTouteMemoire() {
+	        afficherZoneMemoire("Mémoire complète (0x0000 - 0xFFFF)", 0x0000, 0x10000);
+	    }
+	    
+	    private void afficherZoneMemoire(String titre, int adresseDebut, int adresseFin) {
+	        JDialog dialog = new JDialog(this, titre, true);
+	        dialog.setSize(700, 500);
+	        dialog.setLayout(new BorderLayout());
+	        
+	        JTextArea memoireArea = new JTextArea(25, 60);
+	        memoireArea.setFont(new Font("Monospaced", Font.PLAIN, 11));
+	        memoireArea.setEditable(false);
+	        
+	        StringBuilder sb = new StringBuilder();
+	        sb.append("Adresse  Valeur\n");
+	        sb.append("════════════════\n");
+	        
+	        int limite = Math.min(adresseFin, adresseDebut + 0x200);
+	        
+	        for (int adresse = adresseDebut; adresse < limite; adresse++) {
+	            byte valeur = motorola.memoire[adresse];
+	            sb.append(String.format("%04X     %02X\n", adresse, valeur & 0xFF));
+	        }
+	        
+	        if (adresseFin > limite) {
+	            sb.append("\n... (affichage limité) ...\n");
+	        }
+	        
+	        memoireArea.setText(sb.toString());
+	        
+	        JScrollPane scrollPane = new JScrollPane(memoireArea);
+	        dialog.add(scrollPane, BorderLayout.CENTER);
+	        
+	        JPanel panelBoutons = new JPanel();
+	        JButton fermerButton = new JButton("Fermer");
+	        fermerButton.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                dialog.dispose();
+	            }
+	        });
+	        
+	        panelBoutons.add(fermerButton);
+	        dialog.add(panelBoutons, BorderLayout.SOUTH);
+	        
+	        dialog.setLocationRelativeTo(this);
+	        dialog.setVisible(true);
+	    }
+	    
+	    private void mettreAJourAffichage() {
+	        // Mise à jour des registres
+	        pcField.setText(String.format("%04X", registres.getPC()));
+	        aField.setText(String.format("%02X", registres.getA()));
+	        bField.setText(String.format("%02X", registres.getB()));
+	        xField.setText(String.format("%04X", registres.getX()));
+	        yField.setText(String.format("%04X", registres.getY()));
+	        sField.setText(String.format("%04X", registres.getS()));
+	        uField.setText(String.format("%04X", registres.getU()));
+	        dpField.setText(String.format("%02X", registres.getDP()));
+	        
+	        // Mise à jour du CCR
+	        int ccr = registres.getCCR();
+	        eCheckBox.setSelected((ccr & 0x80) != 0);
+	        fCheckBox.setSelected((ccr & 0x40) != 0);
+	        hCheckBox.setSelected((ccr & 0x20) != 0);
+	        iCheckBox.setSelected((ccr & 0x10) != 0);
+	        nCheckBox.setSelected((ccr & 0x08) != 0);
+	        zCheckBox.setSelected((ccr & 0x04) != 0);
+	        vCheckBox.setSelected((ccr & 0x02) != 0);
+	        cCheckBox.setSelected((ccr & 0x01) != 0);
+	        
+	        // Mise à jour de la RAM
+	        StringBuilder ramText = new StringBuilder();
+	        ramText.append("Adresse  Valeur\n");
+	        for (int i = 0x0000; i < 0x000C; i++) {
+	            ramText.append(String.format("%04X     %02X\n", i, motorola.memoire[i] & 0xFF));
+	        }
+	        ramArea.setText(ramText.toString());
+	        
+	        // Mise à jour de la ROM
+	        StringBuilder romText = new StringBuilder();
+	        romText.append("Adresse  Valeur\n");
+	        for (int i = 0xC000; i < 0xC00C; i++) {
+	            romText.append(String.format("%04X     %02X\n", i, motorola.memoire[i] & 0xFF));
+	        }
+	        romArea.setText(romText.toString());
+	    }
+	    
+	    public static void main(String[] args) {
+	        SwingUtilities.invokeLater(new Runnable() {
+	            @Override
+	            public void run() {
+	                new Interfaceprojetmotorola();
+	            }
+	        });
+	    }
+	}
